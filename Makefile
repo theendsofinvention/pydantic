@@ -6,7 +6,15 @@ black = black -S -l 120 --target-version py36 pydantic tests
 install:
 	pip install -U setuptools pip
 	pip install -U -r requirements.txt
-	pip install -e .
+	SKIP_CYTHON=1 pip install -e .
+
+.PHONY: build-cython-trace
+build-cython-trace:
+	python setup.py build_ext --force --inplace --define CYTHON_TRACE
+
+.PHONY: build-cython
+build-cython:
+	python setup.py build_ext --inplace
 
 .PHONY: format
 format:
@@ -27,28 +35,25 @@ mypy:
 .PHONY: test
 test:
 	pytest --cov=pydantic
-
-.PHONY: external-mypy
-external-mypy:
-	@echo "testing simple example with mypy (and python to check it's sane)..."
-	python tests/mypy_test_success.py
-	mypy tests/mypy_test_success.py
-	@echo "checking code with incorrect types fails..."
-	@mypy tests/mypy_test_fails1.py 1>/dev/null; \
-	  test $$? -eq 1 || \
-	  (echo "mypy_test_fails1: mypy passed when it should have failed!"; exit 1)
-	@mypy tests/mypy_test_fails2.py 1>/dev/null; \
-	  test $$? -eq 1 || \
-	  (echo "mypy_test_fails2: mypy passed when it should have failed!"; exit 1)
+	@python tests/try_assert.py
 
 .PHONY: testcov
-testcov:
-	pytest --cov=pydantic
+testcov: test
 	@echo "building coverage html"
 	@coverage html
 
+.PHONY: testcov-compile
+testcov-compile: build-cython-trace test
+	@echo "building coverage html"
+	@coverage html
+
+.PHONY: test-examples
+test-examples:
+	@echo "running examples"
+	@find docs/examples -type f -name '*.py' | xargs -I'{}' sh -c 'python {} >/dev/null 2>&1 || (echo "{} failed")'
+
 .PHONY: all
-all: testcov lint mypy external-mypy
+all: testcov lint mypy
 
 .PHONY: benchmark-all
 benchmark-all:
@@ -72,6 +77,8 @@ clean:
 	rm -f .coverage
 	rm -f .coverage.*
 	rm -rf build
+	rm -rf dist
+	rm -f pydantic/*.c pydantic/*.so
 	python setup.py clean
 	make -C docs clean
 

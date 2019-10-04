@@ -1,6 +1,9 @@
+import os
 import re
+import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+
 from setuptools import setup
 
 
@@ -19,7 +22,7 @@ class ReplaceLinks:
         return f'{m.group(1)}`@{name}`_'
 
     def extra(self):
-        return '\n\n' + '\n'.join(self.links) + '\n'
+        return '\n\n' + '\n'.join(sorted(self.links)) + '\n'
 
 
 description = 'Data validation and settings management using python 3.6 type hinting'
@@ -39,6 +42,26 @@ except FileNotFoundError:
 
 # avoid loading the package before requirements are installed:
 version = SourceFileLoader('version', 'pydantic/version.py').load_module()
+
+ext_modules = None
+if not any(arg in sys.argv for arg in ['clean', 'check']) and 'SKIP_CYTHON' not in os.environ:
+    try:
+        from Cython.Build import cythonize
+    except ImportError:
+        pass
+    else:
+        # For cython test coverage install with `make build-cython-trace`
+        compiler_directives = {}
+        if 'CYTHON_TRACE' in sys.argv:
+            compiler_directives['linetrace'] = True
+        os.environ['CFLAGS'] = '-O3'
+        ext_modules = cythonize(
+            'pydantic/*.py',
+            exclude=['pydantic/generics.py'],
+            nthreads=4,
+            language_level=3,
+            compiler_directives=compiler_directives,
+        )
 
 setup(
     name='pydantic',
@@ -76,7 +99,8 @@ setup(
         'dataclasses>=0.6;python_version<"3.7"'
     ],
     extras_require={
-        'ujson': ['ujson>=1.35'],
         'email': ['email-validator>=1.0.3'],
-    }
+        'typing_extensions': ['typing-extensions>=3.7.2']
+    },
+    ext_modules=ext_modules,
 )

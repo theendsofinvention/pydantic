@@ -3,10 +3,156 @@
 History
 -------
 
-v0.25 (unreleased)
+v1.0b1 (2019-10-01)
+...................
+* **Breaking Change:** rename ``Schema`` to ``Field``, make it a function to placate mypy, #577 by @samuelcolvin
+* **Breaking Change:** modify parsing behavior for ``bool``, #617 by @dmontagu
+* **Breaking Change:** ``get_validators`` is no longer recognised, use ``__get_validators__``.
+  ``Config.ignore_extra`` and ``Config.allow_extra`` are no longer recognised, use ``Config.extra``, #720 by @samuelcolvin
+* **Breaking Change:** modify default config settings for ``BaseSettings``; ``case_insensitive`` renamed to ``case_sensitive``,
+  default changed to ``case_sensitive = False``, ``env_prefix`` default changed to ``''`` - e.g. no prefix, #721 by @dmontagu
+* **Breaking change:** Implement ``root_validator`` and rename root errors from ``__obj__`` to ``__root__``, #729 by @samuelcolvin
+* **Breaking Change:** alter the behaviour of ``dict(model)`` so that sub-models are nolonger
+  converted to dictionaries, #733 by @samuelcolvin
+* **Breaking change:** Added ``initvars`` support to ``post_init_post_parse``, #748 by @Raphael-C-Almeida
+* **Breaking Change:** Make ``BaseModel.json()`` only serialize the ``__root__`` key for models with custom root, #752 by @dmontagu
+* **Breaking Change:** complete rewrite of ``URL`` parsing logic, #755 by @samuelcolvin
+* **Breaking Change:** preserve superclass annotations for field-determination when not provided in subclass, #757 by @dmontagu
+* **Breaking Change:** ``BaseSettings`` now uses the special ``env`` settings to define which environment variables to
+  read, not aliases, #847 by @samuelcolvin
+* add support for ``assert`` statements inside validators, #653 by @abdusco
+* Update documentation to specify the use of ``pydantic.dataclasses.dataclass`` and subclassing ``pydantic.BaseModel``, #710 by @maddosaurus
+* Allow custom JSON decoding and encoding via ``json_loads`` and ``json_dumps`` ``Config`` properties, #714 by @samuelcolvin
+* make all annotated fields occur in the order declared, #715 by @dmontagu
+* use pytest to test ``mypy`` integration, #735 by @dmontagu
+* add ``__repr__`` method to ``ErrorWrapper``, #738 by @samuelcolvin
+* Added support for ``FrozenSet`` members in dataclasses, and a better error when attempting to use types from the ``typing`` module that are not supported by Pydantic, #745 by @djpetti
+* add documentation for Pycharm Plugin, #750 by @koxudaxi
+* fix broken examples in the docs, #753 by @dmontagu
+* moving typing related objects into ``pydantic.typing``, #761 by @samuelcolvin
+* Minor performance improvements to ``ErrorWrapper``, ``ValidationError`` and datetime parsing, #763 by @samuelcolvin
+* Improvements to ``datetime``/``date``/``time``/``timedelta`` types: more descriptive errors,
+  change errors to ``value_error`` not ``type_error``, support bytes, #766 by @samuelcolvin
+* fix error messages for ``Literal`` types with multiple allowed values, #770 by @dmontagu
+* Improved auto-generated ``title`` field in JSON schema by converting underscore to space, #772 by @skewty
+* support ``mypy --no-implicit-reexport`` for dataclasses, also respect ``--no-implicit-reexport`` in pydantic itself, #783 by @samuelcolvin
+* add the ``PaymentCardNumber`` type, #790 by @matin
+* Fix const validations for lists, #794 by @hmvp
+* Set ``additionalProperties`` to false in schema for models with extra fields disallowed, #796 by @Code0x58
+* ``EmailStr`` validation method now returns local part case-sensitive per RFC 5321, #798 by @henriklindgren
+* Added ability to validate strictness to ``ConstrainedFloat``, ``ConstrainedInt`` and ``ConstrainedStr`` and added
+  ``StrictFloat`` and ``StrictInt`` classes, #799 by @DerRidda
+* Improve handling of ``None`` and ``Optional``, replace ``whole`` with ``each_item`` (inverse meaning, default ``False``)
+  on validators, #803 by @samuelcolvin
+* add support for ``Type[T]`` type hints, #807 by @timonbimon
+* Performance improvements from removing ``change_exceptions``, change how pydantic error are constructed, #819 by @samuelcolvin
+* Fix the error message arising when a ``BaseModel``-type model field causes a ``ValidationError`` during parsing, #820 by @dmontagu
+* allow ``getter_dict`` on ``Config``, modify ``GetterDict`` to be more like a ``Mapping`` object and thus easier to work with, #821 by @samuelcolvin
+* Only check ``TypeVar`` param on base ``GenericModel`` class, #842 by @zpencerq
+* rename ``Model._schema_cache`` -> ``Model.__schema_cache__``, ``Model._json_encoder`` -> ``Model.__json_encoder__``,
+  ``Model._custom_root_type`` -> ``Model.__custom_root_type__``, #851 by @samuelcolvin
+
+v0.32.2 (2019-08-17)
+....................
+* fix ``__post_init__`` usage with dataclass inheritance, fix #739 by @samuelcolvin
+* fix required fields validation on GenericModels classes, #742 by @amitbl
+* fix defining custom ``Schema`` on ``GenericModel`` fields, #754 by @amitbl
+
+v0.32.1 (2019-08-08)
+....................
+* do not validate extra fields when ``validate_assignment`` is on, #724 by @YaraslauZhylko
+
+v0.32 (2019-08-06)
+..................
+* add model name to ``ValidationError`` error message, #676 by @dmontagu
+* **breaking change**: remove ``__getattr__`` and rename ``__values__`` to ``__dict__`` on ``BaseModel``,
+  deprecation warning on use ``__values__`` attr, attributes access speed increased up to 14 times, #712 by @MrMrRobat
+* support ``ForwardRef`` (without self-referencing annotations) in Python 3.6, #706 by @koxudaxi
+* implement ``schema_extra`` in ``Config`` sub-class, #663 by @tiangolo
+
+v0.31.1 (2019-07-31)
+....................
+* fix json generation for ``EnumError``, #697 by @dmontagu
+* update numerous dependencies
+
+v0.31 (2019-07-24)
+..................
+* better support for floating point `multiple_of` values, #652 by @justindujardin
+* fix schema generation for ``NewType`` and ``Literal``, #649 by @dmontagu
+* fix ``alias_generator`` and field config conflict, #645 by @gmetzker and #658 by @MrMrRobat
+* more detailed message for ``EnumError``, #673 by @dmontagu
+* add advanced exclude support for ``dict``, ``json`` and ``copy``, #648 by @MrMrRobat
+* fix bug in ``GenericModel`` for models with concrete parameterized fields, #672 by @dmontagu
+* add documentation for ``Literal`` type, #651 by @dmontagu
+* add ``Config.keep_untouched`` for custom descriptors support, #679 by @MrMrRobat
+* use ``inspect.cleandoc`` internally to get model description, #657 by @tiangolo
+* add ``Color`` to schema generation, by @euri10
+* add documentation for Literal type, #651 by @dmontagu
+
+v0.30.1 (2019-07-15)
+....................
+* fix so nested classes which inherit and change ``__init__`` are correctly processed while still allowing ``self`` as a
+  parameter, #644 by @lnaden and @dgasmith
+
+v0.30 (2019-07-07)
+..................
+* enforce single quotes in code, #612 by @samuelcolvin
+* fix infinite recursion with dataclass inheritance and ``__post_init__``, #606 by @Hanaasagi
+* fix default values for ``GenericModel``, #610 by @dmontagu
+* clarify that self-referencing models require python 3.7+, #616 by @vlcinsky
+* fix truncate for types, #611 by @dmontagu
+* add ``alias_generator`` support, #622 by @MrMrRobat
+* fix unparameterized generic type schema generation, #625 by @dmontagu
+* fix schema generation with multiple/circular references to the same model, #621 by @tiangolo and @wongpat
+* support custom root types, #628 by @koxudaxi
+* support ``self`` as a field name in ``parse_obj``, #632 by @samuelcolvin
+
+v0.29 (2019-06-19)
+..................
+* support dataclasses.InitVar, #592 by @pfrederiks
+* Updated documentation to elucidate the usage of ``Union`` when defining multiple types under an attribute's
+  annotation and showcase how the type-order can affect marshalling of provided values, #594 by @somada141
+* add ``conlist`` type, #583 by @hmvp
+* add support for generics, #595 by @dmontagu
+
+v0.28 (2019-06-06)
+..................
+* fix support for JSON Schema generation when using models with circular references in Python 3.7, #572 by @tiangolo
+* support ``__post_init_post_parse__`` on dataclasses, #567 by @sevaho
+* allow dumping dataclasses to JSON, #575 by @samuelcolvin and @DanielOberg
+* ORM mode, #562 by @samuelcolvin
+* fix ``pydantic.compiled`` on ipython, #573 by @dmontagu and @samuelcolvin
+* add ``StrictBool`` type, #579 by @cazgp
+
+v0.27 (2019-05-30)
+..................
+* **breaking change**  ``_pydantic_post_init`` to execute dataclass' original ``__post_init__`` before
+  validation, #560 by @HeavenVolkoff
+* fix handling of generic types without specified parameters, #550 by @dmontagu
+* **breaking change** (maybe): this is the first release compiled with **cython**, see the docs and please
+  submit an issue if you run into problems
+
+v0.27.0a1 (2019-05-26)
+......................
+* fix JSON Schema for ``list``, ``tuple``, and ``set``, #540 by @tiangolo
+* compiling with cython, ``manylinux`` binaries, some other performance improvements, #548 by @samuelcolvin
+
+v0.26 (2019-05-22)
+..................
+* fix to schema generation for ``IPvAnyAddress``, ``IPvAnyInterface``, ``IPvAnyNetwork`` #498 by @pilosus
+* fix variable length tuples support, #495 by @pilosus
+* fix return type hint for ``create_model``, #526 by @dmontagu
+* **Breaking Change:** fix ``.dict(skip_keys=True)`` skipping values set via alias (this involves changing
+  ``validate_model()`` to always returns ``Tuple[Dict[str, Any], Set[str], Optional[ValidationError]]``), #517 by @sommd
+* fix to schema generation for ``IPv4Address``, ``IPv6Address``, ``IPv4Interface``,
+  ``IPv6Interface``, ``IPv4Network``, ``IPv6Network`` #532 by @euri10
+* add ``Color`` type, #504 by @pilosus and @samuelcolvin
+
+v0.25 (2019-05-05)
 ..................
 * Improve documentation on self-referencing models and annotations, #487 by @theenglishway
 * fix ``.dict()`` with extra keys, #490 by @JaewonKim
+* support ``const`` keyword in ``Schema``, #434 by @Sean1708
 
 v0.24 (2019-04-23)
 ..................

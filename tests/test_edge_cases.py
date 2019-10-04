@@ -8,6 +8,7 @@ import pytest
 from pydantic import (
     BaseConfig,
     BaseModel,
+    BaseSettings,
     Extra,
     NoneStrBytes,
     StrBytes,
@@ -15,7 +16,9 @@ from pydantic import (
     constr,
     errors,
     validate_model,
+    validator,
 )
+from pydantic.fields import Schema
 
 
 def test_str_bytes():
@@ -24,8 +27,7 @@ def test_str_bytes():
 
     m = Model(v='s')
     assert m.v == 's'
-    assert '<Field(v type=typing.Union[str, bytes] required)>' == repr(m.fields['v'])
-    assert 'not_none_validator' in [v.__qualname__ for v in m.fields['v'].sub_fields[0].validators]
+    assert '<ModelField(v type=typing.Union[str, bytes] required)>' == repr(m.fields['v'])
 
     m = Model(v=b'b')
     assert m.v == 'b'
@@ -33,8 +35,7 @@ def test_str_bytes():
     with pytest.raises(ValidationError) as exc_info:
         Model(v=None)
     assert exc_info.value.errors() == [
-        {'loc': ('v',), 'msg': 'none is not an allowed value', 'type': 'type_error.none.not_allowed'},
-        {'loc': ('v',), 'msg': 'none is not an allowed value', 'type': 'type_error.none.not_allowed'},
+        {'loc': ('v',), 'msg': 'none is not an allowed value', 'type': 'type_error.none.not_allowed'}
     ]
 
 
@@ -72,8 +73,7 @@ def test_union_int_str():
     with pytest.raises(ValidationError) as exc_info:
         Model(v=None)
     assert exc_info.value.errors() == [
-        {'loc': ('v',), 'msg': 'value is not a valid integer', 'type': 'type_error.integer'},
-        {'loc': ('v',), 'msg': 'none is not an allowed value', 'type': 'type_error.none.not_allowed'},
+        {'loc': ('v',), 'msg': 'none is not an allowed value', 'type': 'type_error.none.not_allowed'}
     ]
 
 
@@ -186,8 +186,8 @@ def test_tuple_more():
         simple_tuple: tuple = None
         tuple_of_different_types: Tuple[int, float, str, bool] = None
 
-    m = Model(simple_tuple=[1, 2, 3, 4], tuple_of_different_types=[1, 2, 3, 4])
-    assert m.dict() == {'simple_tuple': (1, 2, 3, 4), 'tuple_of_different_types': (1, 2.0, '3', True)}
+    m = Model(simple_tuple=[1, 2, 3, 4], tuple_of_different_types=[4, 3, 2, 1])
+    assert m.dict() == {'simple_tuple': (1, 2, 3, 4), 'tuple_of_different_types': (4, 3.0, '2', True)}
 
 
 def test_tuple_length_error():
@@ -273,9 +273,9 @@ def test_list_unions():
 
     with pytest.raises(ValidationError) as exc_info:
         Model(v=[1, 2, None])
+
     assert exc_info.value.errors() == [
-        {'loc': ('v', 2), 'msg': 'value is not a valid integer', 'type': 'type_error.integer'},
-        {'loc': ('v', 2), 'msg': 'none is not an allowed value', 'type': 'type_error.none.not_allowed'},
+        {'loc': ('v', 2), 'msg': 'none is not an allowed value', 'type': 'type_error.none.not_allowed'}
     ]
 
 
@@ -324,7 +324,7 @@ def test_infer_alias():
             fields = {'a': '_a'}
 
     assert Model(_a='different').a == 'different'
-    assert repr(Model.__fields__['a']) == "<Field(a type=str default='foobar' alias=_a)>"
+    assert repr(Model.__fields__['a']) == "<ModelField(a type=str default='foobar' alias=_a)>"
 
 
 def test_alias_error():
@@ -390,6 +390,73 @@ def test_include_exclude_default():
 
     assert m.dict(include={'a', 'b', 'c'}, exclude={'b'}, skip_defaults=True) == {'a': 1}
     assert m.dict(include={'a', 'b', 'c'}, exclude={'a', 'c'}, skip_defaults=True) == {'b': 2}
+
+
+def test_advanced_exclude():
+    class SubSubModel(BaseModel):
+        a: str
+        b: str
+
+    class SubModel(BaseModel):
+        c: str
+        d: List[SubSubModel]
+
+    class Model(BaseModel):
+        e: str
+        f: SubModel
+
+    m = Model(e='e', f=SubModel(c='foo', d=[SubSubModel(a='a', b='b'), SubSubModel(a='c', b='e')]))
+
+    assert m.dict(exclude={'f': {'c': ..., 'd': {-1: {'a'}}}}) == {
+        'e': 'e',
+        'f': {'d': [{'a': 'a', 'b': 'b'}, {'b': 'e'}]},
+    }
+    assert m.dict(exclude={'e': ..., 'f': {'d'}}) == {'f': {'c': 'foo'}}
+
+
+def test_advanced_value_inclide():
+    class SubSubModel(BaseModel):
+        a: str
+        b: str
+
+    class SubModel(BaseModel):
+        c: str
+        d: List[SubSubModel]
+
+    class Model(BaseModel):
+        e: str
+        f: SubModel
+
+    m = Model(e='e', f=SubModel(c='foo', d=[SubSubModel(a='a', b='b'), SubSubModel(a='c', b='e')]))
+
+    assert m.dict(include={'f'}) == {'f': {'c': 'foo', 'd': [{'a': 'a', 'b': 'b'}, {'a': 'c', 'b': 'e'}]}}
+    assert m.dict(include={'e'}) == {'e': 'e'}
+    assert m.dict(include={'f': {'d': {0: ..., -1: {'b'}}}}) == {'f': {'d': [{'a': 'a', 'b': 'b'}, {'b': 'e'}]}}
+
+
+def test_advanced_value_exclude_include():
+    class SubSubModel(BaseModel):
+        a: str
+        b: str
+
+    class SubModel(BaseModel):
+        c: str
+        d: List[SubSubModel]
+
+    class Model(BaseModel):
+        e: str
+        f: SubModel
+
+    m = Model(e='e', f=SubModel(c='foo', d=[SubSubModel(a='a', b='b'), SubSubModel(a='c', b='e')]))
+
+    assert m.dict(exclude={'f': {'c': ..., 'd': {-1: {'a'}}}}, include={'f'}) == {
+        'f': {'d': [{'a': 'a', 'b': 'b'}, {'b': 'e'}]}
+    }
+    assert m.dict(exclude={'e': ..., 'f': {'d'}}, include={'e', 'f'}) == {'f': {'c': 'foo'}}
+
+    assert m.dict(exclude={'f': {'d': {-1: {'a'}}}}, include={'f': {'d'}}) == {
+        'f': {'d': [{'a': 'a', 'b': 'b'}, {'b': 'e'}]}
+    }
 
 
 def test_field_set_ignore_extra():
@@ -459,9 +526,9 @@ def test_inheritance():
 
     class Bar(Foo):
         x: float = 12.3
-        a = 123
+        a = 123.0
 
-    assert Bar().dict() == {'x': 12.3, 'a': 123}
+    assert Bar().dict() == {'x': 12.3, 'a': 123.0}
 
 
 def test_invalid_type():
@@ -470,7 +537,12 @@ def test_invalid_type():
         class Model(BaseModel):
             x: 43 = 123
 
-    assert "error checking inheritance of 43 (type: int)" in str(exc_info)
+    assert 'error checking inheritance of 43 (type: int)' in exc_info.value.args[0]
+
+
+class CustomStr(str):
+    def foobar(self):
+        return 7
 
 
 @pytest.mark.parametrize(
@@ -485,6 +557,7 @@ def test_invalid_type():
         (True, 'True'),
         (False, 'False'),
         (StrEnum.a, 'a10'),
+        (CustomStr('whatever'), 'whatever'),
     ],
 )
 def test_valid_string_types(value, expected):
@@ -541,6 +614,33 @@ def test_partial_inheritance_config():
     assert str(m) == "Child a=1 b='s'"
 
 
+def test_annotation_inheritance():
+    class A(BaseModel):
+        integer: int = 1
+
+    class B(A):
+        integer = 2
+
+    assert B.__annotations__['integer'] == int
+    assert B.__fields__['integer'].type_ == int
+
+    class C(A):
+        integer: str = 'G'
+
+    assert C.__annotations__['integer'] == str
+    assert C.__fields__['integer'].type_ == str
+
+    with pytest.raises(TypeError) as exc_info:
+
+        class D(A):
+            integer = 'G'
+
+    assert str(exc_info.value) == (
+        'The type of D.integer differs from the new default value; '
+        'if you wish to change the type of this field, please use a type annotation'
+    )
+
+
 def test_string_none():
     class Model(BaseModel):
         a: constr(min_length=20, max_length=1000) = ...
@@ -562,8 +662,8 @@ def test_alias_camel_case():
 
         class Config(BaseConfig):
             @classmethod
-            def get_field_schema(cls, name):
-                field_config = super().get_field_schema(name) or {}
+            def get_field_info(cls, name):
+                field_config = super().get_field_info(name) or {}
                 if 'alias' not in field_config:
                     field_config['alias'] = re.sub(r'(?:^|_)([a-z])', lambda m: m.group(1).upper(), name)
                 return field_config
@@ -574,12 +674,12 @@ def test_alias_camel_case():
     assert v == {'one_thing': 123, 'another_thing': 321}
 
 
-def test_get_field_schema_inherit():
+def test_get_field_info_inherit():
     class ModelOne(BaseModel):
         class Config(BaseConfig):
             @classmethod
-            def get_field_schema(cls, name):
-                field_config = super().get_field_schema(name) or {}
+            def get_field_info(cls, name):
+                field_config = super().get_field_info(name) or {}
                 if 'alias' not in field_config:
                     field_config['alias'] = re.sub(r'_([a-z])', lambda m: m.group(1).upper(), name)
                 return field_config
@@ -601,9 +701,14 @@ def test_return_errors_ok():
         foo: int
         bar: List[int]
 
-    assert validate_model(Model, {'foo': '123', 'bar': (1, 2, 3)}) == {'foo': 123, 'bar': [1, 2, 3]}
-    d, e = validate_model(Model, {'foo': '123', 'bar': (1, 2, 3)}, False)
+    assert validate_model(Model, {'foo': '123', 'bar': (1, 2, 3)}) == (
+        {'foo': 123, 'bar': [1, 2, 3]},
+        {'foo', 'bar'},
+        None,
+    )
+    d, f, e = validate_model(Model, {'foo': '123', 'bar': (1, 2, 3)}, False)
     assert d == {'foo': 123, 'bar': [1, 2, 3]}
+    assert f == {'foo', 'bar'}
     assert e is None
 
 
@@ -612,12 +717,14 @@ def test_return_errors_error():
         foo: int
         bar: List[int]
 
-    d, e = validate_model(Model, {'foo': '123', 'bar': (1, 2, 'x')}, False)
+    d, f, e = validate_model(Model, {'foo': '123', 'bar': (1, 2, 'x')}, False)
     assert d == {'foo': 123}
+    assert f == {'foo', 'bar'}
     assert e.errors() == [{'loc': ('bar', 2), 'msg': 'value is not a valid integer', 'type': 'type_error.integer'}]
 
-    d, e = validate_model(Model, {'bar': (1, 2, 3)}, False)
+    d, f, e = validate_model(Model, {'bar': (1, 2, 3)}, False)
     assert d == {'bar': [1, 2, 3]}
+    assert f == {'bar'}
     assert e.errors() == [{'loc': ('foo',), 'msg': 'field required', 'type': 'value_error.missing'}]
 
 
@@ -657,24 +764,6 @@ def test_unable_to_infer():
     assert exc_info.value.args[0] == 'unable to infer type for attribute "x"'
 
 
-def test_get_validator():
-    class CustomClass:
-        @classmethod
-        def get_validators(cls):
-            yield cls.validate
-
-        @classmethod
-        def validate(cls, v):
-            return v * 2
-
-    with pytest.warns(DeprecationWarning):
-
-        class Model(BaseModel):
-            x: CustomClass
-
-    assert Model(x=42).x == 84
-
-
 def test_multiple_errors():
     class Model(BaseModel):
         a: Union[None, int, float, Decimal]
@@ -683,7 +772,6 @@ def test_multiple_errors():
         Model(a='foobar')
 
     assert exc_info.value.errors() == [
-        {'loc': ('a',), 'msg': 'value is not none', 'type': 'type_error.none.allowed'},
         {'loc': ('a',), 'msg': 'value is not a valid integer', 'type': 'type_error.integer'},
         {'loc': ('a',), 'msg': 'value is not a valid float', 'type': 'type_error.float'},
         {'loc': ('a',), 'msg': 'value is not a valid decimal', 'type': 'type_error.decimal'},
@@ -724,55 +812,6 @@ def test_validate_all():
         {'loc': ('a',), 'msg': 'field required', 'type': 'value_error.missing'},
         {'loc': ('b',), 'msg': 'field required', 'type': 'value_error.missing'},
     ]
-
-
-def test_ignore_extra_true():
-    with pytest.warns(DeprecationWarning, match='Model: "ignore_extra" is deprecated and replaced by "extra"'):
-
-        class Model(BaseModel):
-            foo: int
-
-            class Config:
-                ignore_extra = True
-
-    assert Model.__config__.extra is Extra.ignore
-
-
-def test_ignore_extra_false():
-    with pytest.warns(DeprecationWarning, match='Model: "ignore_extra" is deprecated and replaced by "extra"'):
-
-        class Model(BaseModel):
-            foo: int
-
-            class Config:
-                ignore_extra = False
-
-    assert Model.__config__.extra is Extra.forbid
-
-
-def test_allow_extra():
-    with pytest.warns(DeprecationWarning, match='Model: "allow_extra" is deprecated and replaced by "extra"'):
-
-        class Model(BaseModel):
-            foo: int
-
-            class Config:
-                allow_extra = True
-
-    assert Model.__config__.extra is Extra.allow
-
-
-def test_ignore_extra_allow_extra():
-    with pytest.warns(DeprecationWarning, match='Model: "ignore_extra" and "allow_extra" are deprecated and'):
-
-        class Model(BaseModel):
-            foo: int
-
-            class Config:
-                ignore_extra = False
-                allow_extra = False
-
-    assert Model.__config__.extra is Extra.forbid
 
 
 def test_force_extra():
@@ -830,26 +869,6 @@ def test_multiple_inheritance_config():
     assert Child.__config__.use_enum_values is True
 
 
-def test_multiple_inheritance_config_legacy_extra():
-    with pytest.warns(DeprecationWarning, match='Parent: "ignore_extra" and "allow_extra" are deprecated and'):
-
-        class Parent(BaseModel):
-            class Config:
-                allow_extra = False
-                ignore_extra = False
-
-        class Mixin(BaseModel):
-            pass
-
-        class Child(Mixin, Parent):
-            pass
-
-    assert BaseModel.__config__.extra is Extra.ignore
-    assert Parent.__config__.extra is Extra.forbid
-    assert Mixin.__config__.extra is Extra.ignore
-    assert Child.__config__.extra is Extra.forbid
-
-
 def test_submodel_different_type():
     class Foo(BaseModel):
         a: int
@@ -867,3 +886,132 @@ def test_submodel_different_type():
     assert Spam(c=Foo(a='123')).dict() == {'c': {'a': 123}}
     with pytest.raises(ValidationError):
         Spam(c=Bar(b='123'))
+
+
+def test_self():
+    class Model(BaseModel):
+        self: str
+
+    m = Model.parse_obj(dict(self='some value'))
+    assert m.dict() == {'self': 'some value'}
+    assert m.self == 'some value'
+    assert m.schema() == {
+        'title': 'Model',
+        'type': 'object',
+        'properties': {'self': {'title': 'Self', 'type': 'string'}},
+        'required': ['self'],
+    }
+
+
+@pytest.mark.parametrize('model', [BaseModel, BaseSettings])
+def test_self_recursive(model):
+    class SubModel(model):
+        self: int
+
+    class Model(model):
+        sm: SubModel
+
+    m = Model.parse_obj({'sm': {'self': '123'}})
+    assert m.dict() == {'sm': {'self': 123}}
+
+
+@pytest.mark.parametrize('model', [BaseModel, BaseSettings])
+def test_nested_init(model):
+    class NestedModel(model):
+        self: str
+        modified_number: int = 1
+
+        def __init__(someinit, **kwargs):
+            super().__init__(**kwargs)
+            someinit.modified_number += 1
+
+    class TopModel(model):
+        self: str
+        nest: NestedModel
+
+    m = TopModel.parse_obj(dict(self='Top Model', nest=dict(self='Nested Model', modified_number=0)))
+    assert m.self == 'Top Model'
+    assert m.nest.self == 'Nested Model'
+    assert m.nest.modified_number == 1
+
+
+def test_values_attr_deprecation():
+    class Model(BaseModel):
+        foo: int
+        bar: str
+
+    m = Model(foo=4, bar='baz')
+    with pytest.warns(DeprecationWarning, match='`__values__` attribute is deprecated, use `__dict__` instead'):
+        assert m.__values__ == m.__dict__
+
+
+def test_init_inspection():
+    class Foobar(BaseModel):
+        x: int
+
+        def __init__(self, **data) -> None:
+            with pytest.raises(AttributeError):
+                assert self.x
+            super().__init__(**data)
+
+    Foobar(x=1)
+
+
+def test_ignored_type():
+    def foobar():
+        pass
+
+    class Model(BaseModel):
+        a: int = foobar
+        b: int
+
+    assert Model.__fields__.keys() == {'b'}
+
+
+def test_optional_subfields():
+    class Model(BaseModel):
+        a: Optional[int]
+
+    assert Model.__fields__['a'].sub_fields is None
+    assert Model.__fields__['a'].allow_none is True
+
+    with pytest.raises(ValidationError) as exc_info:
+        Model(a='foobar')
+
+    assert exc_info.value.errors() == [
+        {'loc': ('a',), 'msg': 'value is not a valid integer', 'type': 'type_error.integer'}
+    ]
+    assert Model().a is None
+    assert Model(a=None).a is None
+    assert Model(a=12).a == 12
+
+
+def test_not_optional_subfields():
+    class Model(BaseModel):
+        a: Optional[int]
+
+        @validator('a')
+        def check_a(cls, v):
+            return v
+
+    assert Model.__fields__['a'].sub_fields is None
+    # assert Model.__fields__['a'].required is True
+    assert Model.__fields__['a'].allow_none is True
+
+    with pytest.raises(ValidationError) as exc_info:
+        Model(a='foobar')
+
+    assert exc_info.value.errors() == [
+        {'loc': ('a',), 'msg': 'value is not a valid integer', 'type': 'type_error.integer'}
+    ]
+    assert Model().a is None
+    assert Model(a=None).a is None
+    assert Model(a=12).a == 12
+
+
+def test_scheme_deprecated():
+
+    with pytest.warns(DeprecationWarning, match='`Schema` is deprecated, use `Field` instead'):
+
+        class Model(BaseModel):
+            foo: int = Schema(4)

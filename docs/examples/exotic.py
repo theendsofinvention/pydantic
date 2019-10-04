@@ -1,12 +1,36 @@
 import uuid
 from decimal import Decimal
-from ipaddress import IPv4Address, IPv6Address, IPv4Interface, IPv6Interface, IPv4Network, IPv6Network
+from ipaddress import IPv4Address, IPv4Interface, IPv4Network, IPv6Address, IPv6Interface, IPv6Network
 from pathlib import Path
 from uuid import UUID
 
-from pydantic import (DSN, UUID1, UUID3, UUID4, UUID5, BaseModel, DirectoryPath, EmailStr, FilePath, NameEmail,
-                      NegativeFloat, NegativeInt, PositiveFloat, PositiveInt, PyObject, UrlStr, conbytes, condecimal,
-                      confloat, conint, constr, IPvAnyAddress, IPvAnyInterface, IPvAnyNetwork, SecretStr, SecretBytes)
+from pydantic import (
+    UUID1,
+    UUID3,
+    UUID4,
+    UUID5,
+    BaseModel,
+    DirectoryPath,
+    EmailStr,
+    FilePath,
+    IPvAnyAddress,
+    IPvAnyInterface,
+    IPvAnyNetwork,
+    NameEmail,
+    NegativeFloat,
+    NegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    PyObject,
+    SecretBytes,
+    SecretStr,
+    conbytes,
+    condecimal,
+    confloat,
+    conint,
+    conlist,
+    constr,
+)
 
 
 class Model(BaseModel):
@@ -34,22 +58,14 @@ class Model(BaseModel):
     pos_float: PositiveFloat = None
     neg_float: NegativeFloat = None
 
+    short_list: conlist(int, min_items=1, max_items=4)
+
     email_address: EmailStr = None
     email_and_name: NameEmail = None
-
-    url: UrlStr = None
 
     password: SecretStr = None
     password_bytes: SecretBytes = None
 
-    db_name = 'foobar'
-    db_user = 'postgres'
-    db_password: str = None
-    db_host = 'localhost'
-    db_port = '5432'
-    db_driver = 'postgres'
-    db_query: dict = None
-    dsn: DSN = None
     decimal: Decimal = None
     decimal_positive: condecimal(gt=0) = None
     decimal_negative: condecimal(lt=0) = None
@@ -70,11 +86,12 @@ class Model(BaseModel):
     ip_v4_interface: IPv4Interface = None
     ip_v6_interface: IPv6Interface = None
 
+
 m = Model(
     cos_function='math.cos',
     path_to_something='/home',
-    path_to_file='/home/file.py',
-    path_to_directory='home/projects',
+    path_to_file='docs/examples/example1.py',
+    path_to_directory='docs/examples',
     short_bytes=b'foo',
     strip_bytes=b'   bar',
     short_str='foo',
@@ -89,9 +106,9 @@ m = Model(
     pos_float=2.2,
     neg_float=-2.3,
     unit_interval=0.5,
+    short_list=[1, 2],
     email_address='Samuel Colvin <s@muelcolvin.com >',
     email_and_name='Samuel Colvin <s@muelcolvin.com >',
-    url='http://example.com',
     password='password',
     password_bytes=b'password2',
     decimal=Decimal('42.24'),
@@ -112,7 +129,7 @@ m = Model(
     ip_v6_network=IPv6Network('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128'),
     ip_vany_interface=IPv4Interface('192.168.0.0/24'),
     ip_v4_interface=IPv4Interface('192.168.0.0/24'),
-    ip_v6_interface=IPv6Interface('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128')
+    ip_v6_interface=IPv6Interface('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128'),
 )
 print(m.dict())
 """
@@ -135,13 +152,13 @@ print(m.dict())
     'pos_float': 2.2,
     'neg_float': -2.3,
     'unit_interval': 0.5,
+    'short_list': [1, 2],
     'email_address': 's@muelcolvin.com',
     'email_and_name': <NameEmail("Samuel Colvin <s@muelcolvin.com>")>,
-    'url': 'http://example.com',
+    'is_really_a_bool': True,
     'password': SecretStr('**********'),
     'password_bytes': SecretBytes(b'**********'),
     ...
-    'dsn': 'postgres://postgres@localhost:5432/foobar',
     'decimal': Decimal('42.24'),
     'decimal_positive': Decimal('21.12'),
     'decimal_negative': Decimal('-21.12'),
